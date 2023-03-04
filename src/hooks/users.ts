@@ -1,13 +1,14 @@
 import { ref } from "vue";
 import axios from "axios";
 import debounce from "lodash/debounce";
+import type { DebouncedFunc } from "lodash";
 
 type Data = {
   key: number;
   id: string;
   name: string;
   state: "blank" | "loading" | "success" | "failure";
-  fn: (target: Data) => void;
+  _fn: DebouncedFunc<(target: Data) => Promise<void>>;
   idSetter: string;
 };
 
@@ -24,43 +25,10 @@ async function getUserName(target: Data) {
   }
 }
 
-function generateGetUserNameFunc() {
-  const _getUserName = debounce(getUserName, 1000);
-  console.log("created debounced func");
-
-  return function (target: Data) {
-    if (target.id === "") {
-      target.name = "";
-      target.state = "blank";
-      _getUserName.cancel();
-      return;
-    }
-    target.name = "loading...";
-    target.state = "loading";
-    _getUserName(target);
-  };
-}
-
 export function useUsers() {
-  const org = [1, 2, 3, 4, 5];
+  let nextIdx = 1;
 
-  let nextIdx = 6;
-
-  const datas = ref<Data[]>(
-    org.map(
-      (n): Data => ({
-        key: n,
-        id: "",
-        name: "",
-        state: "blank",
-        fn: generateGetUserNameFunc(),
-        set idSetter(value: string) {
-          this.id = value;
-          this.fn(this);
-        },
-      })
-    )
-  );
+  const datas = ref<Data[]>([]);
 
   function addRow() {
     datas.value.push({
@@ -68,10 +36,18 @@ export function useUsers() {
       id: "",
       name: "",
       state: "blank",
-      fn: generateGetUserNameFunc(),
+      _fn: debounce(getUserName, 1000),
       set idSetter(value: string) {
         this.id = value;
-        this.fn(this);
+        if (value === "") {
+          this.name = "";
+          this.state = "blank";
+          this._fn.cancel();
+        } else {
+          this.name = "loading...";
+          this.state = "loading";
+          this._fn(this);
+        }
       },
     });
   }
@@ -79,10 +55,13 @@ export function useUsers() {
   function deleteRow(target: Data) {
     const idx = datas.value.findIndex((d) => d.key === target.key);
     if (idx !== -1) {
-      target.id = "";
-      target.fn(target);
+      target._fn.cancel();
       datas.value.splice(idx, 1);
     }
+  }
+
+  for (let i = 0; i < 5; i++) {
+    addRow();
   }
 
   return { datas, addRow, deleteRow };
