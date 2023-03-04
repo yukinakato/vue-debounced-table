@@ -79,6 +79,8 @@ export function useUsers() {
   function deleteRow(target: Data) {
     const idx = datas.value.findIndex((d) => d.key === target.key);
     if (idx !== -1) {
+      target.id = "";
+      target.fn(target);
       datas.value.splice(idx, 1);
     }
   }
